@@ -4,7 +4,6 @@ metadata:
   name: aggro-ingress
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    traefik.ingress.kubernetes.io/router.middlewares: aggro-headers@kubernetescrd
 spec:
   tls:
     - hosts:
