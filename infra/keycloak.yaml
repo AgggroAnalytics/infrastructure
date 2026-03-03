@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+data:
+  aggro-realm.json: |
+    {
+      "realm": "aggro",
+      "enabled": true,
+      "displayName": "Aggro",
+      "registrationAllowed": true,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": true,
+      "editUsernameAllowed": false,
+      "roles": {
+        "realm": [
+          { "name": "ORG_OWNER", "description": "Organization owner" },
+          { "name": "ORG_ADMIN", "description": "Organization admin" },
+          { "name": "ORG_ANALYST", "description": "Organization analyst" },
+          { "name": "ORG_VIEWER", "description": "Organization viewer" }
+        ]
+      },
+      "clients": [
+        {
+          "clientId": "aggro-frontend",
+          "enabled": true,
+          "publicClient": true,
+          "directAccessGrantsEnabled": true,
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
+          "rootUrl": "http://localhost:3000",
+          "baseUrl": "/",
+          "redirectUris": ["http://localhost:3000/*"],
+          "webOrigins": ["http://localhost:3000", "+"],
+          "protocol": "openid-connect",
+          "fullScopeAllowed": true
+        },
+        {
+          "clientId": "aggro-backend",
+          "enabled": true,
+          "publicClient": false,
+          "bearerOnly": true,
+          "protocol": "openid-connect"
+        }
+      ],
+      "users": [
+        {
+          "username": "dev",
+          "email": "dev@aggro.local",
+          "firstName": "Dev",
+          "lastName": "User",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            {
+              "type": "password",
+              "value": "dev",
+              "temporary": false
+            }
+          ],
+          "realmRoles": ["ORG_OWNER"]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:24.0
+          args:
+            - start-dev
+            - --import-realm
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: "admin"
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: "admin"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: "forwarded"
+          volumeMounts:
+            - name: realm-config
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: realm-config
+          configMap:
+            name: keycloak-realm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  type: ClusterIP
+  selector:
+    app: keycloak
+  ports:
+    - port: 8080
+      targetPort: 8080

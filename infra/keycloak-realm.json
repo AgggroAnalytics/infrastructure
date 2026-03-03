@@ -1,0 +1,65 @@
+{
+  "realm": "aggro",
+  "enabled": true,
+  "displayName": "Aggro",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "roles": {
+    "realm": [
+      { "name": "ORG_OWNER", "description": "Organization owner" },
+      { "name": "ORG_ADMIN", "description": "Organization admin" },
+      { "name": "ORG_ANALYST", "description": "Organization analyst" },
+      { "name": "ORG_VIEWER", "description": "Organization viewer" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "aggro-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "rootUrl": "http://localhost:3000",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "+"
+      ],
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true
+    },
+    {
+      "clientId": "aggro-backend",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "dev",
+      "email": "dev@aggro.local",
+      "firstName": "Dev",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["ORG_OWNER"]
+    }
+  ]
+}

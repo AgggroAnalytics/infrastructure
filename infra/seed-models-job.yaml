@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seed-models-script
+data:
+  seed.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    SERVICES="m1-health-stress:8001:8002 m2-irrigation-wateruse:8003:8004 m3-soil-degradation:8005:8006"
+
+    for entry in $SERVICES; do
+      IFS=: read -r name train_port infer_port <<< "$entry"
+      host="${name}-training"
+
+      echo "=== Training $name ==="
+      RUN_ID=$(curl -sf -X POST "http://${host}:${train_port}/train" \
+        -H "Content-Type: application/json" \
+        -d '{"epochs": 10}' | python3 -c "import sys,json; print(json.load(sys.stdin)['run_id'])")
+      echo "  Run ID: $RUN_ID"
+
+      for i in $(seq 1 60); do
+        sleep 3
+        STATUS=$(curl -sf "http://${host}:${train_port}/train/$RUN_ID" \
+          | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+        echo "  [$i] Status: $STATUS"
+        if [ "$STATUS" = "completed" ]; then break; fi
+        if [ "$STATUS" = "failed" ]; then echo "FAILED"; exit 1; fi
+      done
+
+      echo "  Reloading inference model..."
+      curl -sf -X POST "http://${name}-inference:${infer_port}/reload-model" | python3 -m json.tool
+      echo ""
+    done
+
+    echo "All models trained and loaded."
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-models
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: seed-models
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: python:3.11-slim
+          command: ["bash", "-c", "apt-get update -qq && apt-get install -y -qq curl > /dev/null 2>&1 && bash /scripts/seed.sh"]
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: seed-models-script
+            defaultMode: 0755

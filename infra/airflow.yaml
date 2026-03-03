@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-config
+data:
+  AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql://postgres:postgres@postgres:5432/airflow"
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+  INGESTION_POSTGRES_DSN: "postgresql://postgres:postgres@postgres:5432/aggro_backend"
+  INGESTION_MINIO_ENDPOINT: "minio:9000"
+  INGESTION_MINIO_ACCESS_KEY: "minioadmin"
+  INGESTION_MINIO_SECRET_KEY: "minioadmin"
+  INGESTION_MINIO_BUCKET: "aggro-artifacts"
+  INGESTION_KAFKA_BROKERS: "kafka:9092"
+  M1_INFERENCE_URL: "http://m1-health-stress-inference:8002/predict"
+  M2_INFERENCE_URL: "http://m2-irrigation-wateruse-inference:8004/predict"
+  M3_INFERENCE_URL: "http://m3-soil-degradation-inference:8006/predict"
+  GEE_SERVICE_ACCOUNT: "cpv-783@cpvv2-463207.iam.gserviceaccount.com"
+  GEE_SERVICE_ACCOUNT_KEY_PATH: "/secrets/gee/gee-sa-key.json"
+  GEE_PROJECT: "cpvv2-463207"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-webserver
+  labels:
+    app: airflow
+    component: webserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+      component: webserver
+  template:
+    metadata:
+      labels:
+        app: airflow
+        component: webserver
+    spec:
+      initContainers:
+        - name: init-db
+          image: ingestion-airflow:latest
+          command: ["bash", "-c", "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@localhost || true"]
+          envFrom:
+            - configMapRef:
+                name: airflow-config
+      containers:
+        - name: webserver
+          image: ingestion-airflow:latest
+          command: ["airflow", "webserver", "--port", "8080"]
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: airflow-config
+          volumeMounts:
+            - name: gee-sa-key
+              mountPath: /secrets/gee
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: gee-sa-key
+          secret:
+            secretName: gee-sa-key
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  labels:
+    app: airflow
+    component: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+      component: scheduler
+  template:
+    metadata:
+      labels:
+        app: airflow
+        component: scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: ingestion-airflow:latest
+          command: ["airflow", "scheduler"]
+          envFrom:
+            - configMapRef:
+                name: airflow-config
+          volumeMounts:
+            - name: gee-sa-key
+              mountPath: /secrets/gee
+              readOnly: true
+      volumes:
+        - name: gee-sa-key
+          secret:
+            secretName: gee-sa-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+spec:
+  type: ClusterIP
+  selector:
+    app: airflow
+    component: webserver
+  ports:
+    - port: 8080
+      targetPort: 8080
