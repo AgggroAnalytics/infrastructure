@@ -10,10 +10,6 @@ on:
         required: false
         default: ""
 
-env:
-  KUBECONFIG_PATH: /etc/rancher/k3s/k3s.yaml
-  NAMESPACE: aggro
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -32,15 +28,47 @@ jobs:
           envs: SERVICE,TAG
           script: |
             export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            NS=aggro
 
-            if [ -n "$SERVICE" ] && [ "$SERVICE" != "all" ]; then
-              echo "Rolling out $SERVICE with tag $TAG"
-              kubectl -n aggro set image "deployment/$SERVICE" \
-                "*=ghcr.io/agggroanalytics/${SERVICE}:${TAG}"
-              kubectl -n aggro rollout status "deployment/$SERVICE" --timeout=120s
-            else
-              echo "Full cluster apply requested — pull latest infra repo and apply"
-              cd /opt/aggro || exit 1
-              git pull origin master
-              kubectl apply -k k8s/
+            rollout() {
+              local deploy="$1" image="$2"
+              echo "Updating $deploy -> $image:$TAG"
+              kubectl -n $NS set image "deployment/$deploy" "*=${image}:${TAG}"
+              kubectl -n $NS rollout status "deployment/$deploy" --timeout=180s
+            }
+
+            if [ -z "$SERVICE" ] || [ "$SERVICE" = "all" ]; then
+              echo "Full apply: pulling latest manifests"
+              cd /opt/aggro && git pull origin master
+              set -a && source .env && set +a
+              bash scripts/bootstrap-vps.sh
+              exit 0
             fi
+
+            case "$SERVICE" in
+              backend)
+                rollout backend ghcr.io/agggroanalytics/backend
+                ;;
+              frontend)
+                rollout frontend ghcr.io/agggroanalytics/frontend
+                ;;
+              ingestion-worker)
+                rollout ingestion-worker ghcr.io/agggroanalytics/ingestion
+                ;;
+              m1-health-stress)
+                rollout m1-health-stress-training ghcr.io/agggroanalytics/m1-health-stress-training
+                rollout m1-health-stress-inference ghcr.io/agggroanalytics/m1-health-stress-inference
+                ;;
+              m2-irrigation-wateruse)
+                rollout m2-irrigation-wateruse-training ghcr.io/agggroanalytics/m2-irrigation-wateruse-training
+                rollout m2-irrigation-wateruse-inference ghcr.io/agggroanalytics/m2-irrigation-wateruse-inference
+                ;;
+              m3-soil-degradation)
+                rollout m3-soil-degradation-training ghcr.io/agggroanalytics/m3-soil-degradation-training
+                rollout m3-soil-degradation-inference ghcr.io/agggroanalytics/m3-soil-degradation-inference
+                ;;
+              *)
+                echo "Unknown service: $SERVICE"
+                exit 1
+                ;;
+            esac
