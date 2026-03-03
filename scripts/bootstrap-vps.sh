@@ -109,6 +109,7 @@ sed -i "s|__DOMAIN__|${DOMAIN}|g" "$WORK_DIR"/k8s/ingress.yaml
 sed -i "s|__ACME_EMAIL__|${ACME_EMAIL}|g" "$WORK_DIR"/k8s/cert-manager-issuer.yaml
 sed -i "s|__PUBLIC_URL__|${PUBLIC_URL}|g" "$WORK_DIR"/k8s/infra/keycloak.yaml
 sed -i "s|__KEYCLOAK_USER_PASSWORD__|${KEYCLOAK_USER_PASSWORD}|g" "$WORK_DIR"/k8s/infra/keycloak.yaml
+sed -i "s|__DOMAIN__|${DOMAIN}|g" "$WORK_DIR"/k8s/infra/keycloak.yaml
 sed -i "s|__PG_PASSWORD__|${PG_PASSWORD}|g" "$WORK_DIR"/k8s/apps/backend.yaml
 sed -i "s|__PG_PASSWORD__|${PG_PASSWORD}|g" "$WORK_DIR"/k8s/apps/ingestion-worker.yaml
 sed -i "s|__GEE_SERVICE_ACCOUNT__|${GEE_SERVICE_ACCOUNT}|g" "$WORK_DIR"/k8s/apps/ingestion-worker.yaml

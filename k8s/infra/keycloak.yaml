@@ -86,9 +86,9 @@ spec:
           args:
             - start
             - --import-realm
-            - --hostname-strict=false
             - --http-enabled=true
             - --proxy-headers=forwarded
+            - --http-relative-path=/auth
           ports:
             - containerPort: 8080
           env:
@@ -101,13 +101,17 @@ spec:
                   key: admin-password
             - name: KC_HEALTH_ENABLED
               value: "true"
+            - name: KC_HOSTNAME
+              value: "__DOMAIN__"
+            - name: KC_HOSTNAME_PATH
+              value: "/auth"
           volumeMounts:
             - name: realm-config
               mountPath: /opt/keycloak/data/import
               readOnly: true
           readinessProbe:
             httpGet:
-              path: /health/ready
+              path: /auth/health/ready
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10

@@ -4,7 +4,7 @@ metadata:
   name: backend-config
 data:
   BACKEND_POSTGRES_DSN: "postgres://postgres:__PG_PASSWORD__@postgres:5432/aggro_backend?sslmode=disable"
-  BACKEND_KEYCLOAK_URL: "http://keycloak:8080"
+  BACKEND_KEYCLOAK_URL: "http://keycloak:8080/auth"
   BACKEND_KEYCLOAK_REALM: "aggro"
   BACKEND_KAFKA_BROKERS: "kafka:9092"
   BACKEND_MINIO_ENDPOINT: "minio:9000"
