@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-soil-degradation-config
+  labels:
+    app: m3-soil-degradation
+data:
+  M3_TRAINING_POSTGRES_HOST: "postgres"
+  M3_TRAINING_POSTGRES_PORT: "5432"
+  M3_TRAINING_POSTGRES_DB: "m3_soil_degradation"
+  M3_TRAINING_POSTGRES_USER: "postgres"
+  M3_TRAINING_MINIO_ENDPOINT: "minio:9000"
+  M3_TRAINING_MINIO_BUCKET: "m3-models"
+  M3_TRAINING_MINIO_USE_SSL: "false"
+  M3_TRAINING_SERVICE_PORT: "8005"
+  M3_INFERENCE_POSTGRES_HOST: "postgres"
+  M3_INFERENCE_POSTGRES_PORT: "5432"
+  M3_INFERENCE_POSTGRES_DB: "m3_soil_degradation"
+  M3_INFERENCE_POSTGRES_USER: "postgres"
+  M3_INFERENCE_MINIO_ENDPOINT: "minio:9000"
+  M3_INFERENCE_MINIO_BUCKET: "m3-models"
+  M3_INFERENCE_MINIO_USE_SSL: "false"
+  M3_INFERENCE_SERVICE_PORT: "8006"
+  M3_INFERENCE_MODEL_VERSION: "latest"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m3-soil-degradation-training
+  labels:
+    app: m3-soil-degradation
+    component: training
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m3-soil-degradation
+      component: training
+  template:
+    metadata:
+      labels:
+        app: m3-soil-degradation
+        component: training
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: training
+          image: ghcr.io/agggroanalytics/m3-soil-degradation-training:latest
+          ports:
+            - containerPort: 8005
+          envFrom:
+            - configMapRef:
+                name: m3-soil-degradation-config
+            - secretRef:
+                name: m3-soil-degradation-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m3-soil-degradation-training
+spec:
+  type: ClusterIP
+  selector:
+    app: m3-soil-degradation
+    component: training
+  ports:
+    - port: 8005
+      targetPort: 8005
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m3-soil-degradation-inference
+  labels:
+    app: m3-soil-degradation
+    component: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m3-soil-degradation
+      component: inference
+  template:
+    metadata:
+      labels:
+        app: m3-soil-degradation
+        component: inference
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: inference
+          image: ghcr.io/agggroanalytics/m3-soil-degradation-inference:latest
+          ports:
+            - containerPort: 8006
+          envFrom:
+            - configMapRef:
+                name: m3-soil-degradation-config
+            - secretRef:
+                name: m3-soil-degradation-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8006
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8006
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m3-soil-degradation-inference
+spec:
+  type: ClusterIP
+  selector:
+    app: m3-soil-degradation
+    component: inference
+  ports:
+    - port: 8006
+      targetPort: 8006

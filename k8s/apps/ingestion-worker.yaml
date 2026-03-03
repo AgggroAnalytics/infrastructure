@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingestion-config
+  labels:
+    app: ingestion
+data:
+  INGESTION_KAFKA_BROKERS: "kafka:9092"
+  INGESTION_KAFKA_GROUP_ID: "ingestion-worker"
+  INGESTION_POSTGRES_DSN: "postgresql://postgres:__PG_PASSWORD__@postgres:5432/aggro_backend"
+  INGESTION_MINIO_ENDPOINT: "minio:9000"
+  INGESTION_MINIO_BUCKET: "aggro-artifacts"
+  M1_INFERENCE_URL: "http://m1-health-stress-inference:8002/predict"
+  M2_INFERENCE_URL: "http://m2-irrigation-wateruse-inference:8004/predict"
+  M3_INFERENCE_URL: "http://m3-soil-degradation-inference:8006/predict"
+  GEE_SERVICE_ACCOUNT: "__GEE_SERVICE_ACCOUNT__"
+  GEE_SERVICE_ACCOUNT_KEY_PATH: "/secrets/gee/gee-sa-key.json"
+  GEE_PROJECT: "__GEE_PROJECT__"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestion-worker
+  labels:
+    app: ingestion
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingestion
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: ingestion
+        component: worker
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: ingestion-worker
+          image: ghcr.io/agggroanalytics/ingestion:latest
+          envFrom:
+            - configMapRef:
+                name: ingestion-config
+            - secretRef:
+                name: ingestion-secrets
+          volumeMounts:
+            - name: gee-sa-key
+              mountPath: /secrets/gee
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: gee-sa-key
+          secret:
+            secretName: gee-sa-key

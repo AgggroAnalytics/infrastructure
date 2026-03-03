@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: aggro
+
+resources:
+  - namespace.yaml
+  # Infrastructure
+  - infra/postgres.yaml
+  - infra/kafka.yaml
+  - infra/minio.yaml
+  - infra/keycloak.yaml
+  # Application services
+  - apps/backend.yaml
+  - apps/frontend.yaml
+  - apps/ingestion-worker.yaml
+  # ML modules
+  - ml/m1-health-stress.yaml
+  - ml/m2-irrigation-wateruse.yaml
+  - ml/m3-soil-degradation.yaml
+  # One-off jobs
+  - jobs/kafka-init-topics.yaml
+  - jobs/seed-models.yaml
+  # Ingress
+  - ingress.yaml

@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m1-health-stress-config
+  labels:
+    app: m1-health-stress
+data:
+  M1_TRAINING_POSTGRES_HOST: "postgres"
+  M1_TRAINING_POSTGRES_PORT: "5432"
+  M1_TRAINING_POSTGRES_DB: "m1_health_stress"
+  M1_TRAINING_MINIO_ENDPOINT: "minio:9000"
+  M1_TRAINING_MINIO_BUCKET: "m1-models"
+  M1_TRAINING_MINIO_USE_SSL: "false"
+  M1_INFERENCE_POSTGRES_HOST: "postgres"
+  M1_INFERENCE_POSTGRES_PORT: "5432"
+  M1_INFERENCE_POSTGRES_DB: "m1_health_stress"
+  M1_INFERENCE_MINIO_ENDPOINT: "minio:9000"
+  M1_INFERENCE_MINIO_BUCKET: "m1-models"
+  M1_INFERENCE_MINIO_USE_SSL: "false"
+  M1_INFERENCE_MODEL_VERSION: "latest"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m1-health-stress-training
+  labels:
+    app: m1-health-stress
+    component: training
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m1-health-stress
+      component: training
+  template:
+    metadata:
+      labels:
+        app: m1-health-stress
+        component: training
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: training
+          image: ghcr.io/agggroanalytics/m1-health-stress-training:latest
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - configMapRef:
+                name: m1-health-stress-config
+            - secretRef:
+                name: m1-health-stress-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m1-health-stress-training
+spec:
+  type: ClusterIP
+  selector:
+    app: m1-health-stress
+    component: training
+  ports:
+    - port: 8001
+      targetPort: 8001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m1-health-stress-inference
+  labels:
+    app: m1-health-stress
+    component: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m1-health-stress
+      component: inference
+  template:
+    metadata:
+      labels:
+        app: m1-health-stress
+        component: inference
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: inference
+          image: ghcr.io/agggroanalytics/m1-health-stress-inference:latest
+          ports:
+            - containerPort: 8002
+          envFrom:
+            - configMapRef:
+                name: m1-health-stress-config
+            - secretRef:
+                name: m1-health-stress-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m1-health-stress-inference
+spec:
+  type: ClusterIP
+  selector:
+    app: m1-health-stress
+    component: inference
+  ports:
+    - port: 8002
+      targetPort: 8002

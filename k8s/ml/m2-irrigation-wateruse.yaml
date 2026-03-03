@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m2-irrigation-wateruse-config
+  labels:
+    app: m2-irrigation-wateruse
+data:
+  M2_TRAINING_POSTGRES_HOST: "postgres"
+  M2_TRAINING_POSTGRES_PORT: "5432"
+  M2_TRAINING_POSTGRES_DB: "m2_irrigation_wateruse"
+  M2_TRAINING_MINIO_ENDPOINT: "minio:9000"
+  M2_TRAINING_MINIO_BUCKET: "m2-models"
+  M2_INFERENCE_POSTGRES_HOST: "postgres"
+  M2_INFERENCE_POSTGRES_PORT: "5432"
+  M2_INFERENCE_POSTGRES_DB: "m2_irrigation_wateruse"
+  M2_INFERENCE_MINIO_ENDPOINT: "minio:9000"
+  M2_INFERENCE_MINIO_BUCKET: "m2-models"
+  M2_INFERENCE_MODEL_VERSION: "latest"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m2-irrigation-wateruse-training
+  labels:
+    app: m2-irrigation-wateruse
+    component: training
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m2-irrigation-wateruse
+      component: training
+  template:
+    metadata:
+      labels:
+        app: m2-irrigation-wateruse
+        component: training
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: training
+          image: ghcr.io/agggroanalytics/m2-irrigation-wateruse-training:latest
+          ports:
+            - containerPort: 8003
+          envFrom:
+            - configMapRef:
+                name: m2-irrigation-wateruse-config
+            - secretRef:
+                name: m2-irrigation-wateruse-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m2-irrigation-wateruse-training
+spec:
+  type: ClusterIP
+  selector:
+    app: m2-irrigation-wateruse
+    component: training
+  ports:
+    - port: 8003
+      targetPort: 8003
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m2-irrigation-wateruse-inference
+  labels:
+    app: m2-irrigation-wateruse
+    component: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m2-irrigation-wateruse
+      component: inference
+  template:
+    metadata:
+      labels:
+        app: m2-irrigation-wateruse
+        component: inference
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: inference
+          image: ghcr.io/agggroanalytics/m2-irrigation-wateruse-inference:latest
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef:
+                name: m2-irrigation-wateruse-config
+            - secretRef:
+                name: m2-irrigation-wateruse-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m2-irrigation-wateruse-inference
+spec:
+  type: ClusterIP
+  selector:
+    app: m2-irrigation-wateruse
+    component: inference
+  ports:
+    - port: 8004
+      targetPort: 8004
