@@ -119,7 +119,7 @@ echo "=== Applying cert-manager issuer ==="
 kubectl apply -f "$WORK_DIR/k8s/cert-manager-issuer.yaml"
 
 echo "=== Applying all manifests ==="
-kubectl apply -k "$WORK_DIR/k8s/"
+kubectl apply -k "$WORK_DIR/k8s/" --server-side --force-conflicts
 
 echo "=== Waiting for infrastructure ==="
 kubectl -n aggro wait --for=condition=available --timeout=120s deployment/postgres
